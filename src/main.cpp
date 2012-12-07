@@ -8,6 +8,8 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <limits>
 #include <exception>
 
 // CGM headers
@@ -23,6 +25,8 @@ using std::ios_base;
 using std::ifstream;
 using std::ofstream;
 using std::stringstream;
+using std::min;
+using std::numeric_limits;
 
 //==== Process management related ====//
 // Number of processes
@@ -89,7 +93,7 @@ static void send_block (unsigned block) {
   out << "Sending " << width*height << endl;
   for (unsigned i = 0; i < height; ++i)
     for (unsigned j = 0; j < width; ++j)
-      set_data(data[i*width+j], costs[id*block_size+i][block*block_size+j]);
+      set_data(data[i*width+j], costs[id*block_size+i][(id+block)*block_size+j]);
   comm->send(id-1, data, 0);
 }
 
@@ -103,18 +107,35 @@ static void receive_block (unsigned block) {
   out << "Received " << num << " (expected " << width*height << ")" << endl;
   for (unsigned i = 0; i < height; ++i)
     for (unsigned j = 0; j < width; ++j)
-      costs[(id+1)*block_size+i][block*block_size+j] =
+      costs[(id+1)*block_size+i][(id+block)*block_size+j] =
         get_data(data[i*width+j]);
 }
 
 // Computes multiplication costs in block
 static void compute_block (unsigned block) {
   unsigned start_i  = id*block_size,
-           start_j  = id*block_size+block*block_size,
+           start_j  = start_i + block*block_size,
            end_i    = start_i + block_size + (id == p-1)*extra_size,
            end_j    = start_j + block_size + (block >= p-id-1)*extra_size;
-  out << "Computing block [" << start_i << ".." << end_i << ","
-                             << start_j << ".." << end_j << "]" << endl;
+  out << "Computing block [" << start_i << ".." << end_i-1 << ","
+                             << start_j << ".." << end_j-1 << "]" << endl;
+  for (unsigned i = end_i-1; i+1 >= start_i+1; --i) {
+    for (unsigned j = start_j+(i-start_i+1)*!block; j < end_j; ++j) {
+      costs[i][j] = numeric_limits<unsigned>::max();
+      for (unsigned k = i; k < j; ++k) {
+        //out << "step=" << k << endl;
+        //out << "c[i][k]=" << costs[i][k] << endl;
+        //out << "c[k+1][j]=" << costs[k+1][j] << endl;
+        //out << "aux=" << (costs[i][k] + costs[k+1][j] + dims[i]*dims[k+1]*dims[j+1]) << endl;
+        costs[i][j] = min(
+          costs[i][k] + costs[k+1][j] + dims[i]*dims[k+1]*dims[j+1],
+          costs[i][j]
+        );
+      }
+      out << "costs[" << i << "," << j << "]=";
+      out << costs[i][j] << endl;
+    }
+  }
 }
 
 static void cleanup () {
@@ -151,7 +172,7 @@ int main (int argc, char **argv) {
   load_input(argv[1]);
 
   // More startup values
-  n           = dims.size()-2;
+  n           = dims.size()-1;
   block_size  = n/p;
   extra_size  = n%p;
 
@@ -171,7 +192,7 @@ int main (int argc, char **argv) {
     compute_block(i);
     if (id != Comm::PROC_ZERO)
       send_block(i);
-    if (i+1 < p-id)
+    if (i < p-id-1)
       receive_block(i+1);
   }
 
