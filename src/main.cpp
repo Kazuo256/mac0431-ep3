@@ -10,14 +10,10 @@
 #include <sstream>
 #include <algorithm>
 #include <limits>
-#include <exception>
 
 // CGM headers
 #include "Comm.h"
 #include "BasicCommObject.h"
-
-// Local headers
-// TODO?
 
 using std::cout;
 using std::endl;
@@ -119,25 +115,19 @@ static void compute_block (unsigned block) {
            end_j    = start_j + block_size + (block >= p-id-1)*extra_size;
   out << "Computing block [" << start_i << ".." << end_i-1 << ","
                              << start_j << ".." << end_j-1 << "]" << endl;
-  for (unsigned i = end_i-1; i+1 >= start_i+1; --i) {
+  for (unsigned i = end_i-1; i+1 >= start_i+1; --i)
     for (unsigned j = start_j+(i-start_i+1)*!block; j < end_j; ++j) {
       costs[i][j] = numeric_limits<unsigned>::max();
       for (unsigned k = i; k < j; ++k) {
-        //out << "step=" << k << endl;
-        //out << "c[i][k]=" << costs[i][k] << endl;
-        //out << "c[k+1][j]=" << costs[k+1][j] << endl;
-        //out << "aux=" << (costs[i][k] + costs[k+1][j] + dims[i]*dims[k+1]*dims[j+1]) << endl;
         costs[i][j] = min(
           costs[i][k] + costs[k+1][j] + dims[i]*dims[k+1]*dims[j+1],
           costs[i][j]
         );
       }
-      out << "costs[" << i << "," << j << "]=";
-      out << costs[i][j] << endl;
     }
-  }
 }
 
+// Clean up
 static void cleanup () {
   comm->dispose ();
   out.close();
@@ -151,7 +141,7 @@ int main (int argc, char **argv) {
 
   // Output file per process
   stringstream outputname;
-  outputname << "out-" << id;
+  outputname << "log-" << id;
   out.open(outputname.str().c_str(), ios_base::out);
 
   // Setup cleanup callback
@@ -197,8 +187,11 @@ int main (int argc, char **argv) {
   }
 
   // Output answer
-  if (id == Comm::PROC_ZERO)
-    out << costs.front().back() << endl;
+  if (id == Comm::PROC_ZERO) {
+    ofstream answer("answer", ios_base::out);
+    answer << costs.front().back() << endl;
+    answer.close();
+  }
 
   // Bye bye
   return EXIT_SUCCESS;

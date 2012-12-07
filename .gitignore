@@ -1,4 +1,5 @@
 *~
 .*.swp
 /basic
-/out-*
+/log-*
+/answer
