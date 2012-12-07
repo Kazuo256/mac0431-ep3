@@ -13,6 +13,6 @@ CGMLIBDIR = $(CGMROOT)/lib
 
 all: $(EXECS)
 
-ep3: main.o PairCommObject.o utils.o
-	$(CCLINKER) -o $@ main.o PairCommObject.o utils.o -L$(CGMLIBDIR) -lcgm $(MPILDFLAGS)
+ep3: main.o
+	$(CCLINKER) -o $@ main.o -L$(CGMLIBDIR) -lcgm $(MPILDFLAGS)
 
