@@ -7,6 +7,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <exception>
 
 // CGM headers
 #include "Comm.h"
@@ -34,6 +35,10 @@ static Comm                     *comm = NULL;
 static BasicCommObject<double>  zero(0.0);
 
 //==== Algorithm related ====//
+// Cost matrix size
+static unsigned                   n;
+// Size of cost blocks
+static unsigned                   block_size;
 // Dimensions of the matrix chain
 static vector<unsigned>           dims;
 // Matrix of costs
@@ -52,6 +57,10 @@ static void set_data (CommObject* obj, double value) {
 // Load matrix dimensions from input file
 static void load_input (const string& inputfile) {
   ifstream input(inputfile.c_str());
+  if (input.fail()) {
+    cout << "[Proccess " << p << "] Aborting due to invalid input." << endl;
+    exit(EXIT_FAILURE);
+  }
   while (input.good()) {
     double dim;
     input >> dim;
@@ -60,11 +69,31 @@ static void load_input (const string& inputfile) {
   input.close();
 }
 
+// Sends block to process above.
+static void send_block (unsigned block) {
+
+}
+
+// Receives block from process below
+static void receive_block (unsigned block) {
+
+}
+
+// Computes multiplication costs in block
+static void compute_block (unsigned block) {
+
+}
+
+static void cleanup () {
+  comm->dispose ();
+}
+
 int main (int argc, char **argv) {
   // Startup values
   comm  = Comm::getComm (&argc, &argv, NULL);
   p     = comm->getNumberOfProcessors ();
   id    = comm->getMyId ();
+  atexit(cleanup);
 
   // Arg check
   if (argc != 2) {
@@ -75,34 +104,50 @@ int main (int argc, char **argv) {
   // Arg handle
   load_input(argv[1]);
 
-  CommObjectList  data(&zero);
-  CommObjectList  response(&zero);
-  int             actual_source = -1;
+  // More startup values
+  n           = dims.size()-2;
+  block_size  = (n+1)/p; // division ceil
 
-  data.setSize(1);
-  set_data(data[0], 1.0);
-
-  for (int i = 0; i < p-id; ++i) {
-    // contas...
-    if (id != Comm::PROC_ZERO)
-      comm->send(id-1, data, 0);
-    if (i+1 < p-id) {
-      comm->receive(id+1, response, 0, &actual_source);
-      double value = get_data(data[0]),
-             inc = get_data(response[0]);
-      set_data(data[0], value+inc);
-    }
+  try {
+    for (size_t i = 0; i < n; ++i)
+      costs.push_back(vector<unsigned>(n, 0));
+    //costs.resize(n, vector<unsigned>(n, 0));
+  } catch (std::bad_alloc e) {
+    cout << "UGH" << endl;
+    return EXIT_FAILURE;
   }
 
+  //CommObjectList  data(&zero);
+  //CommObjectList  response(&zero);
+  //int             actual_source = -1;
+
+  //data.setSize(1);
+  //set_data(data[0], 1.0);
+
+  for (int i = 0; i < p-id; ++i) {
+    compute_block(i);
+    if (id != Comm::PROC_ZERO)
+      send_block(i);
+      //comm->send(id-1, data, 0);
+    if (i+1 < p-id)
+      receive_block(i);
+    //if (i+1 < p-id) {
+    //  comm->receive(id+1, response, 0, &actual_source);
+    //  double value = get_data(data[0]),
+    //         inc = get_data(response[0]);
+    //  set_data(data[0], value+inc);
+    //}
+  }
+
+  // Output answer
   if (id == Comm::PROC_ZERO) {
     ofstream out("out", ios_base::out);
-    out << "HUZZAH: "
-        << get_data(data[0])
-        << endl;
+    out << costs.front().back() << endl;
     out.close();
   }
 
-  comm->dispose ();
+  // Bye bye
+  return EXIT_SUCCESS;
 
 }
 

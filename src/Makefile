@@ -9,7 +9,7 @@ CGMROOT = /mnt/data/cgmlib
 CGMLIBDIR = $(CGMROOT)/lib
 
 .cpp.o:
-	$(CCC) $(CFLAGS) -I$(CGMROOT)/include -c $<
+	$(CCC) $(CFLAGS) -I$(CGMROOT)/include -c $< -g
 
 all: $(EXECS)
 
