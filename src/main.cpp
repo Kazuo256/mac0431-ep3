@@ -7,6 +7,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <exception>
 
 // CGM headers
@@ -21,6 +22,7 @@ using std::endl;
 using std::ios_base;
 using std::ifstream;
 using std::ofstream;
+using std::stringstream;
 
 //==== Process management related ====//
 // Number of processes
@@ -43,6 +45,9 @@ static unsigned                   block_size;
 static vector<unsigned>           dims;
 // Matrix of costs
 static vector< vector<unsigned> > costs;
+
+// Output
+static ofstream out;
 
 // Get data from CommObject
 static double get_data (CommObject* obj) {
@@ -71,12 +76,27 @@ static void load_input (const string& inputfile) {
 
 // Sends block to process above.
 static void send_block (unsigned block) {
-
+  CommObjectList  data(&zero);
+  unsigned        width = (block < p-id-1 ? block_size : n % block_size),
+                  height = block*block_size+width;
+  data.setSize(width*height);
+  for (unsigned i = 0; i < height; ++i)
+    for (unsigned j = 0; j < width; ++j)
+      set_data(data[i*width+j], costs[id*block_size+i][block*block_size+j]);
+  comm->send(id-1, data, 0);
 }
 
 // Receives block from process below
 static void receive_block (unsigned block) {
-
+  CommObjectList  data(&zero);
+  unsigned        width = (block < p-id-1 ? block_size : n % block_size),
+                  height = (block-1)*block_size+width;
+  int             actual_source = -1;
+  int num = comm->receive(id+1, data, 0, &actual_source);
+  for (unsigned i = 0; i < height; ++i)
+    for (unsigned j = 0; j < width; ++j)
+      costs[(id+1)*block_size+i][block*block_size+j] =
+        get_data(data[i*width+j]);
 }
 
 // Computes multiplication costs in block
@@ -86,6 +106,7 @@ static void compute_block (unsigned block) {
 
 static void cleanup () {
   comm->dispose ();
+  out.close();
 }
 
 int main (int argc, char **argv) {
@@ -93,6 +114,9 @@ int main (int argc, char **argv) {
   comm  = Comm::getComm (&argc, &argv, NULL);
   p     = comm->getNumberOfProcessors ();
   id    = comm->getMyId ();
+  stringstream outputname;
+  outputname << "out-" << id;
+  out.open(outputname.str().c_str(), ios_base::out);
   atexit(cleanup);
 
   // Arg check
@@ -106,16 +130,11 @@ int main (int argc, char **argv) {
 
   // More startup values
   n           = dims.size()-2;
-  block_size  = (n+1)/p; // division ceil
+  block_size  = n/p;
+  if (block_size*p < n) ++block_size;
 
-  try {
-    for (size_t i = 0; i < n; ++i)
-      costs.push_back(vector<unsigned>(n, 0));
-    //costs.resize(n, vector<unsigned>(n, 0));
-  } catch (std::bad_alloc e) {
-    cout << "UGH" << endl;
-    return EXIT_FAILURE;
-  }
+  for (size_t i = 0; i < n; ++i)
+    costs.push_back(vector<unsigned>(n, 0));
 
   //CommObjectList  data(&zero);
   //CommObjectList  response(&zero);
@@ -130,7 +149,7 @@ int main (int argc, char **argv) {
       send_block(i);
       //comm->send(id-1, data, 0);
     if (i+1 < p-id)
-      receive_block(i);
+      receive_block(i+1);
     //if (i+1 < p-id) {
     //  comm->receive(id+1, response, 0, &actual_source);
     //  double value = get_data(data[0]),
@@ -140,11 +159,8 @@ int main (int argc, char **argv) {
   }
 
   // Output answer
-  if (id == Comm::PROC_ZERO) {
-    ofstream out("out", ios_base::out);
+  if (id == Comm::PROC_ZERO)
     out << costs.front().back() << endl;
-    out.close();
-  }
 
   // Bye bye
   return EXIT_SUCCESS;
