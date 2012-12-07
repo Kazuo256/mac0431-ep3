@@ -1,0 +1,43 @@
+# Makefile for C/C++
+
+##### User configurable options #####
+
+SHELL       = /bin/sh
+BINDIR      = /usr/bin
+
+### Implementation details for MPI ##
+
+#MPIHOME     = /usr/lib/openmpi
+#MPICFLAGS   = -I$(MPIHOME)/include
+#MPILDFLAGS  = -L$(MPIHOME)/lib -lmpich
+
+MPIHOME     = /usr/include/mpich2
+MPICFLAGS   = -I$(MPIHOME)
+MPILDFLAGS  = -L$(MPIHOME)/lib -lmpich
+
+
+#### System specific information ####
+
+# Option enabling compiler-specific code
+COMPTYPE    = -DGCC
+
+CC          = `which gcc` $(COMPTYPE) -Wno-deprecated
+CLINKER     = `which gcc`
+CCC         = `which g++` $(COMPTYPE) -Wno-deprecated
+CCLINKER    = `which g++`
+AR          = `which ar`
+RANLIB      = `which ranlib`
+
+### End User configurable options ###
+
+default: all
+
+clean:
+	-/bin/rm -f *.o *~ *.bak *.BAK PI* \#* $(LIBS) $(EXECS)
+
+# not all version of make support .cpp files
+
+.SUFFIXES: .cpp
+
+#.cpp.o:
+#	$(CC) $(CFLAGS) -c $<

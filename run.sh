@@ -1,4 +1,4 @@
 #!/bin/bash
 
-mpiexec.hydra -f /mnt/data/hostfile -np 2 ./src/BroadCastExample 1000
+mpiexec.hydra -f /mnt/data/hostfile -np 4 ./src/ep3 1000
 
