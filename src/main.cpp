@@ -41,6 +41,8 @@ static BasicCommObject<double>  zero(0.0);
 static unsigned                   n;
 // Size of cost blocks
 static unsigned                   block_size;
+// Extra block size
+static unsigned                   extra_size;
 // Dimensions of the matrix chain
 static vector<unsigned>           dims;
 // Matrix of costs
@@ -66,20 +68,25 @@ static void load_input (const string& inputfile) {
     cout << "[Proccess " << p << "] Aborting due to invalid input." << endl;
     exit(EXIT_FAILURE);
   }
+  out << "dims=";
   while (input.good()) {
     double dim;
     input >> dim;
+    if (dim == 0) break;
+    out << dim << " ";
     dims.push_back(dim);
   }
+  out << endl;
   input.close();
 }
 
 // Sends block to process above.
 static void send_block (unsigned block) {
   CommObjectList  data(&zero);
-  unsigned        width = (block < p-id-1 ? block_size : n % block_size),
+  unsigned        width = block_size + (block >= p-id-1)*extra_size,
                   height = block*block_size+width;
   data.setSize(width*height);
+  out << "Sending " << width*height << endl;
   for (unsigned i = 0; i < height; ++i)
     for (unsigned j = 0; j < width; ++j)
       set_data(data[i*width+j], costs[id*block_size+i][block*block_size+j]);
@@ -89,10 +96,11 @@ static void send_block (unsigned block) {
 // Receives block from process below
 static void receive_block (unsigned block) {
   CommObjectList  data(&zero);
-  unsigned        width = (block < p-id-1 ? block_size : n % block_size),
+  unsigned        width =  block_size + (block >= p-id-1)*extra_size,
                   height = (block-1)*block_size+width;
   int             actual_source = -1;
   int num = comm->receive(id+1, data, 0, &actual_source);
+  out << "Received " << num << " (expected " << width*height << ")" << endl;
   for (unsigned i = 0; i < height; ++i)
     for (unsigned j = 0; j < width; ++j)
       costs[(id+1)*block_size+i][block*block_size+j] =
@@ -101,7 +109,12 @@ static void receive_block (unsigned block) {
 
 // Computes multiplication costs in block
 static void compute_block (unsigned block) {
-
+  unsigned start_i  = id*block_size,
+           start_j  = id*block_size+block*block_size,
+           end_i    = start_i + block_size + (id == p-1)*extra_size,
+           end_j    = start_j + block_size + (block >= p-id-1)*extra_size;
+  out << "Computing block [" << start_i << ".." << end_i << ","
+                             << start_j << ".." << end_j << "]" << endl;
 }
 
 static void cleanup () {
@@ -114,10 +127,19 @@ int main (int argc, char **argv) {
   comm  = Comm::getComm (&argc, &argv, NULL);
   p     = comm->getNumberOfProcessors ();
   id    = comm->getMyId ();
+
+  // Output file per process
   stringstream outputname;
   outputname << "out-" << id;
   out.open(outputname.str().c_str(), ios_base::out);
+
+  // Setup cleanup callback
   atexit(cleanup);
+
+  // Output
+  out << "===================" << endl;
+  out << "p=" << p << endl;
+  out << "id=" << id << endl;
 
   // Arg check
   if (argc != 2) {
@@ -131,31 +153,26 @@ int main (int argc, char **argv) {
   // More startup values
   n           = dims.size()-2;
   block_size  = n/p;
-  if (block_size*p < n) ++block_size;
+  extra_size  = n%p;
 
+  // Output
+  out << "n=" << n << endl;
+  out << "blocksize=" << block_size << endl;
+  out << "extrasize=" << extra_size << endl;
+
+  // Build cost matrix
   for (size_t i = 0; i < n; ++i)
     costs.push_back(vector<unsigned>(n, 0));
 
-  //CommObjectList  data(&zero);
-  //CommObjectList  response(&zero);
-  //int             actual_source = -1;
+  comm->synchronize();
 
-  //data.setSize(1);
-  //set_data(data[0], 1.0);
-
+  // Run parallel algorithm
   for (int i = 0; i < p-id; ++i) {
     compute_block(i);
     if (id != Comm::PROC_ZERO)
       send_block(i);
-      //comm->send(id-1, data, 0);
     if (i+1 < p-id)
       receive_block(i+1);
-    //if (i+1 < p-id) {
-    //  comm->receive(id+1, response, 0, &actual_source);
-    //  double value = get_data(data[0]),
-    //         inc = get_data(response[0]);
-    //  set_data(data[0], value+inc);
-    //}
   }
 
   // Output answer

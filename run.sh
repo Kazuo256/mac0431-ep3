@@ -1,4 +1,6 @@
 #!/bin/bash
 
-mpiexec.hydra -f /mnt/data/hostfile -np 2 ./src/ep3 $1
+rm out-*
+mpiexec.hydra -f /mnt/data/hostfile -np $1 ./src/ep3 $2
+cat out-*
 
