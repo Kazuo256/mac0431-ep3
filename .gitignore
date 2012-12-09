@@ -3,3 +3,8 @@
 /basic
 /log-*
 /answer
+*.aux
+*.log
+/relatorio.pdf
+*.out
+*.tar.gz

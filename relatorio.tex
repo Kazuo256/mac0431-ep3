@@ -1,0 +1,125 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+
+\title{MAC0431 - Segundo Semestre de 2012 \\
+       EP3 - Relatório}
+\author{Thiago de Gouveia Nunes - Nº USP: 6797289 \\
+        Wilson Kazuo Mizutani - Nº USP: 6797230}
+
+\begin{document}
+
+\maketitle
+
+\section{Organização dos Arquivos}
+
+  A pasta raiz do trabalho deve conter os seguintes arquivos:
+  
+  \hspace{50pt}
+  \begin{itemize}
+    \item \textbf{src/}:
+      Pasta com o código fonte do programa.
+    \item \textbf{Makefile.common}:
+      Arquivo auxiliar de Makefile que veio com os exemplos da CGMLib.
+    \item \textbf{relatorio.pdf}:
+      Esse relatório.
+    \item \textbf{input, input2 e input3}:
+      Amostras de arquivos de entrada.
+    \item \textbf{run.sh}:
+      Script bash para rodar o programa.
+  \end{itemize}
+
+\section{Compilação}
+
+  Para compilar nosso programa, é preciso entrar na pasta \verb$src/$ e usar o
+  comando \verb$make$:
+
+  \begin{verbatim} $ cd src/
+ $ make \end{verbatim}
+
+\section{Modo de Uso}
+
+  Para usar nosso programa, deve-se rodar o script bash \verb$run.sh$ a partir da pasta
+  raiz:
+  
+  \begin{verbatim} $ ./run.sh <n> <entrada> \end{verbatim}
+  
+  Onde:
+  
+  \begin{itemize}
+    \item[<n>]
+      Número de processadores que devem ser usados para resolver o problema.
+    \item[<entrada>]
+      Caminho para o arquivo de entrada, cujo formato é explicado adiante.
+  \end{itemize}
+ 
+\section{Formato da Entrada}
+
+  O arquivo de entrada deve conter as dimensões das matrizes em sequência, com
+  um zero indicando o final. Por exemplo, o arquivo \verb$input$ contém a
+  sequência:
+
+  \begin{verbatim}                    10 100 50 20 80 0 \end{verbatim}
+
+  Indicando a multiplicação de 4 matrizes com dimensões 10x100, 100x50, 50x20 e
+  20x80, nessa ordem.
+
+\section{Detalhes de Implementação}
+
+  Seguimos bem fielmente a ideia proposta no artigo\footnotemark. As únicas
+  partes mais "abertas" da implementação é como lidar com casos em que o
+  número \verb$p$ de processadores não divide o número \verb$n$ de matrizes e
+  como estruturar os dados nas mensagens entre os processos.
+
+  \footnotetext{
+    \textit{"A Parallel Chain Matrix Product Algorithm on the InteGrade Grid"}
+    indicado no enunciado.
+  }
+
+  Para que o programa lide com o caso em que \verb$p$ não divide \verb$n$, sem
+  ter que ficar tratando casos especiais demasiadamente, usamos os valores
+  \verb$n/p$ (divisão inteira) e \verb$n%p$, chamados de \verb$block_size$ e
+  \verb$extra_size$. Seguimos a explicação do artigo e dividimos a matriz de
+  custos em blocos de \verb$block_size$ campos de largura e altura cada, com a
+  exceção dos blocos da última coluna e da última linha, que têm mais
+  \verb$extra_size$ campos de largura e de altura, respectivamente.
+
+  Na troca de mensagens, simplesmente usamos a classe \verb$BasicCommObject$
+  com o tipo \verb$unsigned$ e serializamos cada bloco em uma
+  \verb$CommObjectList$. Com os valores que cada processo dispõe é possível
+  tanto serializar o bloco quanto recuperar as informações quando a mensagem
+  é recebida. Isso é feito nas funções \verb$send_block$ e \verb$receive_block$,
+  respectivamente.
+
+  A função \verb$compute_block$ calcula os campos da matriz de custos
+  correspondentes a cada turno do algoritmo. Para não ter que tratar o primeiro
+  turno como um caso separado dos demais (pois há menos campos a serem
+  calculados nele), essa função itera nas linha e colunas, de baixo pra cima e
+  da esquerda para a direita, ao invés de pelas diagonais como no algritmo
+  sequencial, pois (1) essa ordem que usamos garante que os campos são
+  calculados em uma ordem válida e (2) basta somar um deslocamento nos índices
+  das colunas quando se está no primeiro turno para lidar com ele.
+  
+\section{Dificuldades e Facilidades}
+
+  A parte mais fácil foi implementar o esqueleto geral do algoritmo e as trocas
+  de mensagens usando a serialização dos blocos. Até ter a primeira versão
+  funcionando para só um processador foi tranquilo também. O problema começou
+  quando aumentamos a entrada e tentamos com mais processadores. Não chegou a
+  ser nada preocupante, apenas um monte de cuidados que precisaram ser tomados
+  com os índices no algoritmo.
+
+  Fora isso, também demoramos um pouco para nos adaptarmos ao trabalho na VM.
+  Principalmente fazer a internet funcionar nela, para que pudéssemos usar SSH
+  e Git. Depois disso ela deixou completamente de ser um empecilho ao trabalho.
+
+  E entender os exemplos e a API da CGMLib foi até que relativamente simples,
+  pelo menos no que diz respeito ao necessário para fazer o EP. O único detalhe
+  um pouco mais estranho foi que precisamos usar uma chamada ao método
+  \verb$synchronize$ para que as saídas dos processos (mesmo que direcionadas
+  para arquivos separados) ficassem corretamente impressas.
+
+\end{document}
+
